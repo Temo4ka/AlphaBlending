@@ -31,7 +31,7 @@ int main()
                 window.close();
         }
 		
-		for (int cur = 0; cur < PIXEL_NUM; cur += 8) {
+		for (int cur = 0; cur < PIXEL_NUM; cur ++) {
 			//_8_i FR = {};
 			//_8_i BK = {};
 
