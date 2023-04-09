@@ -16,15 +16,16 @@ struct Pixel {
 };
 
 union _8_i {
-	__m256i data;
-	  int  idata[8];
-	  char cdata[32];
+	   __m256i      data;
+	    short      sdata[16];
+	     int       idata[8]  = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	 unsigned char cdata[32];
 };
 
 struct BMP_File {
 	char*  header = (char*)  calloc(HEADER_SIZE, sizeof(char ));
 
-	Pixel* pixels = (Pixel*) calloc( PIXEL_NUM + 16 , sizeof(Pixel));
+	Pixel* pixels = (Pixel*) calloc( PIXEL_NUM + 32 , sizeof(Pixel));
 };
 
 FILE* logs = fopen("logs.txt", "w");
@@ -41,4 +42,8 @@ int readBMP(BMP_File* pic, const char* filename);
 
 void drawImage(sf::RenderWindow* window, sf::Image image);
 
-void noormalizeAdress(Pixel** addr);
+void normalizeAdress(Pixel** addr);
+
+void countColors(int cur, sf::Image* image, BMP_File* front, BMP_File* back);
+
+void colorPixels(int x, int y, sf::Image* image, const __m256i MASK_TRANS, const __m256i MASK_SHUFF, _8_i FR, _8_i BK);
