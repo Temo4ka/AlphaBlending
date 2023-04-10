@@ -3,20 +3,6 @@
 #include "config.h"
 #include "header.h"
 
-const __m256i MASK_TRANS_1 = _mm256_set_epi8( 255, 14, 255, 14, 255, 14, 255, 14, 255,  6, 255,  6, 255,  6, 255,  6,
-											  255, 14, 255, 14, 255, 14, 255, 14, 255,  6, 255,  6, 255,  6, 255,  6 );
-
-const __m256i MASK_TRANS_2 = _mm256_set_epi8( 255, 19, 255, 19, 255, 19, 255, 19, 255, 23, 255, 23, 255, 23, 255, 23,
-											  255, 27, 255, 27, 255, 27, 255, 27, 255, 31, 255, 31, 255, 31, 255, 31 );
-
-const __m256i MASK_SHUFF_1 = _mm256_set_epi8( 255, 0, 255, 1, 255,  2, 255,  3, 255,  4, 255,  5, 255,  6, 255,  7,
-											  255, 8, 255, 9, 255, 10, 255, 11, 255, 12, 255, 13, 255, 14, 255, 15 );
-
-const __m256i MASK_SHUFF_2 = _mm256_set_epi8( 255, 16, 255, 17, 255, 18, 255, 19, 255, 20, 255, 21, 255, 22, 255, 23,
-											  255, 24, 255, 25, 255, 26, 255, 27, 255, 28, 255, 29, 255, 30, 255, 31 );
-
-const __m256i     _255     = _mm256_set_epi16(255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255);
-
 int main()
 {
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "AlphaBlending");
@@ -35,11 +21,15 @@ int main()
 	if (front.pixels == nullptr) ERR_EXE(NullptrCaught, logs);
 	if (back.pixels  == nullptr) ERR_EXE(NullptrCaught, logs);
 
-	for (int cur = 0; cur < PIXEL_NUM; cur += 8) {
-		countColors(cur, &image, &front, &back);
-		front.pixels += 8;
-		back.pixels += 8;
+	sf::Clock timer;
+	timer.restart();
+
+	for (int i = 0; i < 100; i++) {
+		for (int cur = 0; cur < PIXEL_NUM; cur += 8) countColors(cur, &image, &front, &back);
 	}
+	float time = timer.getElapsedTime().asSeconds();
+
+	if (logs != nullptr) fprintf(logs, "%lg", time / 100.f);
 
     while (window.isOpen())
     {
@@ -57,6 +47,16 @@ int main()
 }
 
 void countColors(const int cur, sf::Image *image, BMP_File *front, BMP_File *back) {
+	const __m256i MASK_TRANS = _mm256_set_epi8( 255, 14, 255, 14, 255, 14, 255, 14, 255,  6, 255,  6, 255,  6, 255,  6,
+											    255, 14, 255, 14, 255, 14, 255, 14, 255,  6, 255,  6, 255,  6, 255,  6 );
+
+	const __m256i MASK_SHUFF = _mm256_set_epi8(  15,  13,  11,  9 ,  7 ,  5 ,  3 ,  1 ,
+												255, 255, 255, 255, 255, 255, 255, 255,
+												255, 255, 255, 255, 255, 255, 255, 255,
+												15,  13,  11,  9 ,  7 ,  5 ,  3 ,  1  );
+
+	const __m256i   _255     = _mm256_set_epi16(255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255);
+
 	_8_i  FR   = {};
 	_8_i  BK   = {};
 	_8_i FR_l  = {};
@@ -73,43 +73,37 @@ void countColors(const int cur, sf::Image *image, BMP_File *front, BMP_File *bac
 	int x =         cur % WINDOW_WIDTH            ;
 	int y = WINDOW_HEIGHT - cur / WINDOW_WIDTH - 1;
 
-	FR.data = _mm256_loadu_si256((const __m256i*) front->pixels);
-	BK.data = _mm256_loadu_si256((const __m256i*)  back->pixels);
+	FR.data = _mm256_loadu_si256((const __m256i*) (front->pixels + cur));
+	BK.data = _mm256_loadu_si256((const __m256i*) (back ->pixels + cur));
 
-	//separate high and low bytes
+	//                   Separating high and low bytes
 	FR_l.data = _mm256_cvtepu8_epi16(_mm256_extracti128_si256(FR.data, 1));
 	FR_h.data = _mm256_cvtepu8_epi16(_mm256_extracti128_si256(FR.data, 0));
 
 	BK_l.data = _mm256_cvtepu8_epi16(_mm256_extracti128_si256(BK.data, 1));
 	BK_h.data = _mm256_cvtepu8_epi16(_mm256_extracti128_si256(BK.data, 0));
 
-	trans_l.data = _mm256_shuffle_epi8(FR_l.data, MASK_TRANS_1);
-	trans_h.data = _mm256_shuffle_epi8(FR_h.data, MASK_TRANS_1);
+	trans_l.data = _mm256_shuffle_epi8(FR_l.data, MASK_TRANS);
+	trans_h.data = _mm256_shuffle_epi8(FR_h.data, MASK_TRANS);
 
-	//front * alpha
+	//                    Front * Trans
 	FR_l.data = _mm256_mullo_epi16(FR_l.data, trans_l.data);
 	FR_h.data = _mm256_mullo_epi16(FR_h.data, trans_h.data);
 
-	//back * (255 - alpha)
+	//                          Back * (255 - trans)
 	BK_l.data = _mm256_mullo_epi16(BK_l.data, _mm256_subs_epu16(_255, trans_l.data));
 	BK_h.data = _mm256_mullo_epi16(BK_h.data, _mm256_subs_epu16(_255, trans_h.data));
 
-	//back + front
+	//             newBack + newFront
 	Col_l.data = _mm256_add_epi16(FR_l.data, BK_l.data);
 	Col_h.data = _mm256_add_epi16(FR_h.data, BK_h.data);
 
-	__m256i move_mask = _mm256_set_epi8(15, 13, 11, 9, 7, 5, 3, 1,
-		255, 255, 255, 255, 255, 255, 255, 255,
-		255, 255, 255, 255, 255, 255, 255, 255,
-		15, 13, 11, 9, 7, 5, 3, 1);
-
-
-	Col_l.data = _mm256_shuffle_epi8(Col_l.data, move_mask);
-	Col_h.data = _mm256_shuffle_epi8(Col_h.data, move_mask);
+	Col_l.data = _mm256_shuffle_epi8(Col_l.data, MASK_SHUFF);
+	Col_h.data = _mm256_shuffle_epi8(Col_h.data, MASK_SHUFF);
 
 
 	curCl.data = _mm256_set_m128i(_mm_add_epi8(_mm256_extracti128_si256(Col_l.data, 0), _mm256_extracti128_si256(Col_l.data, 1)),
-								_mm_add_epi8(_mm256_extracti128_si256(Col_h.data, 0), _mm256_extracti128_si256(Col_h.data, 1)));
+								  _mm_add_epi8(_mm256_extracti128_si256(Col_h.data, 0), _mm256_extracti128_si256(Col_h.data, 1)));
 
 	for (int curPx = 0; curPx < 32; curPx += 4) {
 		image->setPixel(x, y, sf::Color(curCl.cdata[curPx + 2], curCl.cdata[curPx + 1], curCl.cdata[curPx]));
@@ -143,7 +137,7 @@ void drawImage(sf::RenderWindow* window, sf::Image image) {
 }
 
 void normalizeAdress(Pixel** addr) {
-	while (int(*addr) % 32) (*addr) = (Pixel *) (((char *) (*addr)) + 1);
+	while ((long long)*addr % 32) (*addr) = (Pixel *) (((char *) (*addr)) + 1);
 
 	return;
 }
