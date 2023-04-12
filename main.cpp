@@ -73,8 +73,8 @@ void countColors(const int cur, sf::Image *image, BMP_File *front, BMP_File *bac
 	int x =         cur % WINDOW_WIDTH            ;
 	int y = WINDOW_HEIGHT - cur / WINDOW_WIDTH - 1;
 
-	FR.data = _mm256_loadu_si256((const __m256i*) (front->pixels + cur));
-	BK.data = _mm256_loadu_si256((const __m256i*) (back ->pixels + cur));
+	FR.data = _mm256_load_si256((const __m256i*) (front->pixels + cur));
+	BK.data = _mm256_load_si256((const __m256i*) (back ->pixels + cur));
 
 	//                   Separating high and low bytes
 	FR_l.data = _mm256_cvtepu8_epi16(_mm256_extracti128_si256(FR.data, 1));
